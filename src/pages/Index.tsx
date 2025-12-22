@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface Post {
   id: string;
+  user_id: string;
   title: string;
   content_preview: string;
   image_url: string | null;
@@ -31,6 +32,7 @@ export default function Index() {
       .from("posts")
       .select(`
         id,
+        user_id,
         title,
         content_preview,
         image_url,
@@ -97,6 +99,7 @@ export default function Index() {
                   author={{
                     username: post.profiles?.username || "Anonymous",
                     profilePicUrl: post.profiles?.profile_pic_url || "",
+                    userId: post.user_id,
                   }}
                   createdAt={post.created_at}
                   isAuthenticated={!!user}
