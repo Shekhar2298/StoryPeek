@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut } from "lucide-react";
+import { LogOut, PenLine } from "lucide-react";
 
 export function Header() {
   const { user, profile, signOut } = useAuth();
@@ -22,10 +22,19 @@ export function Header() {
           </span>
         </Link>
 
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-3">
           {user ? (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/create">
+                  <PenLine className="h-4 w-4" />
+                  <span className="hidden sm:inline-block">Write</span>
+                </Link>
+              </Button>
+              <Link
+                to={`/author/${user.id}`}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={profile?.profile_pic_url} alt={profile?.username} />
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs">
@@ -35,12 +44,12 @@ export function Header() {
                 <span className="hidden text-sm font-medium text-foreground sm:inline-block">
                   {profile?.username}
                 </span>
-              </div>
+              </Link>
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4" />
                 <span className="hidden sm:inline-block">Sign out</span>
               </Button>
-            </div>
+            </>
           ) : (
             <Button variant="cta" size="sm" asChild>
               <Link to="/auth">Sign In</Link>

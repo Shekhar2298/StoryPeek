@@ -11,6 +11,7 @@ interface PostCardProps {
   author: {
     username: string;
     profilePicUrl: string;
+    userId?: string;
   };
   createdAt: string;
   isAuthenticated: boolean;
@@ -37,15 +38,20 @@ export function PostCard({
         <div className="flex-1 min-w-0">
           {/* Author info */}
           <div className="flex items-center gap-2 mb-3">
-            <Avatar className="h-6 w-6">
-              <AvatarImage src={author.profilePicUrl} alt={author.username} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                {author.username.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm font-medium text-foreground">
-              {author.username}
-            </span>
+            <Link
+              to={author.userId ? `/author/${author.userId}` : "#"}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              <Avatar className="h-6 w-6">
+                <AvatarImage src={author.profilePicUrl} alt={author.username} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  {author.username.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+                {author.username}
+              </span>
+            </Link>
             <span className="text-muted-foreground">·</span>
             <time className="text-sm text-muted-foreground">{formattedDate}</time>
           </div>
