@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { PostCard } from "@/components/PostCard";
+import { EditStoryDialog } from "@/components/EditStoryDialog";
+import { DeleteStoryDialog } from "@/components/DeleteStoryDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Profile {
@@ -21,8 +23,10 @@ interface Post {
   id: string;
   title: string;
   content_preview: string;
+  content_full: string;
   image_url: string | null;
   created_at: string;
+  user_id: string;
 }
 
 export default function AuthorProfile() {
@@ -31,6 +35,12 @@ export default function AuthorProfile() {
   const [author, setAuthor] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Edit/Delete state
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [deletingPost, setDeletingPost] = useState<Post | null>(null);
+
+  const isOwnProfile = user?.id === userId;
 
   useEffect(() => {
     if (userId) {
@@ -50,10 +60,10 @@ export default function AuthorProfile() {
       setAuthor(profileData);
     }
 
-    // Fetch author's posts
+    // Fetch author's posts with full content for editing
     const { data: postsData, error: postsError } = await supabase
       .from("posts")
-      .select("id, title, content_preview, image_url, created_at")
+      .select("id, title, content_preview, content_full, image_url, created_at, user_id")
       .eq("user_id", authorUserId)
       .order("created_at", { ascending: false });
 
@@ -62,6 +72,20 @@ export default function AuthorProfile() {
     }
 
     setLoading(false);
+  };
+
+  const handleEditSuccess = () => {
+    if (userId) {
+      fetchAuthorData(userId);
+    }
+    setEditingPost(null);
+  };
+
+  const handleDeleteSuccess = () => {
+    if (userId) {
+      fetchAuthorData(userId);
+    }
+    setDeletingPost(null);
   };
 
   const memberSince = author
@@ -166,23 +190,53 @@ export default function AuthorProfile() {
                 <p className="text-muted-foreground">
                   No stories published yet.
                 </p>
+                {isOwnProfile && (
+                  <Button variant="cta" asChild className="mt-4">
+                    <Link to="/create">Write your first story</Link>
+                  </Button>
+                )}
               </div>
             ) : (
               <div>
                 {posts.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    id={post.id}
-                    title={post.title}
-                    contentPreview={post.content_preview}
-                    imageUrl={post.image_url}
-                    author={{
-                      username: author.username,
-                      profilePicUrl: author.profile_pic_url,
-                    }}
-                    createdAt={post.created_at}
-                    isAuthenticated={!!user}
-                  />
+                  <div key={post.id} className="relative group">
+                    <PostCard
+                      id={post.id}
+                      title={post.title}
+                      contentPreview={post.content_preview}
+                      imageUrl={post.image_url}
+                      author={{
+                        username: author.username,
+                        profilePicUrl: author.profile_pic_url,
+                        userId: author.user_id,
+                      }}
+                      createdAt={post.created_at}
+                      isAuthenticated={!!user}
+                    />
+
+                    {/* Edit/Delete buttons for own posts */}
+                    {isOwnProfile && (
+                      <div className="absolute top-6 right-0 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingPost(post)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only sm:not-sr-only sm:ml-1">Edit</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeletingPost(post)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only sm:not-sr-only sm:ml-1">Delete</span>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -195,6 +249,27 @@ export default function AuthorProfile() {
           </div>
         </footer>
       </main>
+
+      {/* Edit Dialog */}
+      {editingPost && (
+        <EditStoryDialog
+          open={!!editingPost}
+          onOpenChange={(open) => !open && setEditingPost(null)}
+          story={editingPost}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {/* Delete Dialog */}
+      {deletingPost && (
+        <DeleteStoryDialog
+          open={!!deletingPost}
+          onOpenChange={(open) => !open && setDeletingPost(null)}
+          storyId={deletingPost.id}
+          storyTitle={deletingPost.title}
+          onSuccess={handleDeleteSuccess}
+        />
+      )}
     </>
   );
 }

@@ -3,58 +3,91 @@ import { useParams, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useRecommendations } from "@/hooks/useRecommendations";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft, Lock, BookOpen } from "lucide-react";
 
 interface Post {
   id: string;
+  user_id: string;
   title: string;
   content_preview: string;
   content_full: string;
   image_url: string | null;
   created_at: string;
-  profiles: {
-    username: string;
-    profile_pic_url: string;
-  };
+  username: string;
+  profile_pic_url: string;
 }
 
 export default function PostDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, loading: authLoading } = useAuth();
   const [post, setPost] = useState<Post | null>(null);
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const recommendations = useRecommendations(post, allPosts, 3);
 
   useEffect(() => {
     if (id) {
       fetchPost(id);
+      fetchAllPosts();
     }
   }, [id]);
 
   const fetchPost = async (postId: string) => {
-    const { data, error } = await supabase
+    const { data: postData, error: postError } = await supabase
       .from("posts")
-      .select(`
-        id,
-        title,
-        content_preview,
-        content_full,
-        image_url,
-        created_at,
-        profiles!posts_user_id_fkey (
-          username,
-          profile_pic_url
-        )
-      `)
+      .select("id, user_id, title, content_preview, content_full, image_url, created_at")
       .eq("id", postId)
       .maybeSingle();
 
-    if (!error && data) {
-      setPost(data as unknown as Post);
+    if (postError || !postData) {
+      setLoading(false);
+      return;
     }
+
+    // Fetch profile for this post
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("username, profile_pic_url")
+      .eq("user_id", postData.user_id)
+      .maybeSingle();
+
+    setPost({
+      ...postData,
+      username: profileData?.username || "Anonymous",
+      profile_pic_url: profileData?.profile_pic_url || "",
+    });
     setLoading(false);
+  };
+
+  const fetchAllPosts = async () => {
+    const { data: postsData } = await supabase
+      .from("posts")
+      .select("id, user_id, title, content_preview, content_full, image_url, created_at")
+      .order("created_at", { ascending: false });
+
+    if (postsData) {
+      // Get profiles for posts
+      const userIds = [...new Set(postsData.map((p) => p.user_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("user_id, username, profile_pic_url")
+        .in("user_id", userIds);
+
+      const profilesMap = new Map(profilesData?.map((p) => [p.user_id, p]) || []);
+
+      setAllPosts(
+        postsData.map((p) => ({
+          ...p,
+          username: profilesMap.get(p.user_id)?.username || "Anonymous",
+          profile_pic_url: profilesMap.get(p.user_id)?.profile_pic_url || "",
+        }))
+      );
+    }
   };
 
   const formattedDate = post
@@ -127,20 +160,22 @@ export default function PostDetail() {
 
           {/* Author info */}
           <div className="flex items-center gap-3 mb-8 pb-6 border-b border-border">
-            <Avatar className="h-10 w-10">
-              <AvatarImage
-                src={post.profiles?.profile_pic_url}
-                alt={post.profiles?.username}
-              />
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                {post.profiles?.username?.charAt(0).toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
+            <Link to={`/author/${post.user_id}`}>
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={post.profile_pic_url} alt={post.username} />
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  {post.username?.charAt(0).toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
             <div>
-              <p className="font-medium text-foreground">
-                {post.profiles?.username || "Anonymous"}
-              </p>
-              <time className="text-sm text-muted-foreground">{formattedDate}</time>
+              <Link
+                to={`/author/${post.user_id}`}
+                className="font-medium text-foreground hover:text-primary transition-colors"
+              >
+                {post.username}
+              </Link>
+              <time className="block text-sm text-muted-foreground">{formattedDate}</time>
             </div>
           </div>
 
@@ -189,6 +224,41 @@ export default function PostDetail() {
             </div>
           )}
         </article>
+
+        {/* Recommendations */}
+        {user && recommendations.length > 0 && (
+          <section className="container max-w-3xl py-8 border-t border-border">
+            <h3 className="flex items-center gap-2 font-serif text-xl font-bold text-foreground mb-6">
+              <BookOpen className="h-5 w-5 text-primary" />
+              You might also enjoy
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {recommendations.map((rec) => (
+                <Link
+                  key={rec.id}
+                  to={`/post/${rec.id}`}
+                  className="group block p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                >
+                  {rec.image_url && (
+                    <div className="h-24 rounded-md overflow-hidden mb-3 bg-muted">
+                      <img
+                        src={rec.image_url}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+                  )}
+                  <h4 className="font-serif font-bold text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                    {rec.title}
+                  </h4>
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    {rec.content_preview}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <footer className="border-t border-border bg-background py-6 mt-12">
           <div className="container text-center text-sm text-muted-foreground">
